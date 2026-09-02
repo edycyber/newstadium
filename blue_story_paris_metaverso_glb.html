@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blue Story Paris — Metaverso</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#01030a;font-family:Arial,sans-serif}
+canvas{display:block}
+#title{
+ position:fixed;z-index:10;top:22px;left:50%;transform:translateX(-50%);
+ text-align:center;color:white;pointer-events:none;text-shadow:0 0 12px #168cff,0 0 35px #174cff
+}
+#title h1{margin:0;font-size:clamp(27px,4vw,54px);letter-spacing:6px}
+#title p{margin:7px 0;font-size:clamp(13px,1.7vw,20px);letter-spacing:3px}
+#controls{
+ position:fixed;z-index:10;left:18px;bottom:18px;color:#d9f4ff;
+ background:rgba(0,8,25,.72);border:1px solid rgba(70,180,255,.4);
+ border-radius:14px;padding:13px 16px;line-height:1.55;font-size:13px;
+ backdrop-filter:blur(8px)
+}
+#sound{
+ position:fixed;z-index:11;right:18px;top:18px;color:#fff;background:rgba(0,20,50,.8);
+ border:1px solid #32aaff;border-radius:22px;padding:10px 15px;cursor:pointer;
+ box-shadow:0 0 20px rgba(0,140,255,.35)
+}
+#loading{
+ position:fixed;z-index:20;inset:0;display:grid;place-items:center;color:white;
+ background:#01030a;font-size:18px;letter-spacing:2px
+}
+#crosshair{
+ position:fixed;z-index:9;left:50%;top:50%;width:12px;height:12px;
+ transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.8);
+ border-radius:50%;pointer-events:none;opacity:.7
+}
+</style>
+</head>
+<body>
+<div id="loading">CARGANDO BLUE STORY PARIS…</div>
+<div id="title">
+  <h1>BLUE STORY PARIS</h1>
+  <p>Cancion: I'll Be Here</p>
+</div>
+<button id="sound">▶ Activar música</button>
+<div id="crosshair"></div>
+<div id="controls">
+<b>CONTROLES</b><br>
+W A S D / Flechas · mover<br>
+Mouse · mirar<br>
+Shift · correr<br>
+Espacio · subir &nbsp; C · bajar<br>
+R · volver al inicio<br>
+Haz clic en la escena para capturar el mouse
+</div>
+
+<audio id="music" src="I'll Be Here.mp3" loop preload="auto"></audio>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import {GLTFLoader} from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x01030a);
+scene.fog = new THREE.FogExp2(0x02040e, 0.0028);
+
+const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.05,2000);
+const start = new THREE.Vector3(0,5,25);
+camera.position.copy(start);
+camera.rotation.order="YXZ";
+
+const renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x74bfff,0x050512,1.7));
+const moon=new THREE.DirectionalLight(0x9bcfff,2.0);
+moon.position.set(-80,150,80);
+moon.castShadow=true;
+scene.add(moon);
+
+const loader=new GLTFLoader();
+let model=null, modelBox=new THREE.Box3();
+
+loader.load("tmpv6gpnn8q.glb", gltf=>{
+  model=gltf.scene;
+  scene.add(model);
+
+  model.traverse(o=>{
+    if(o.isMesh){
+      o.castShadow=true;
+      o.receiveShadow=true;
+      if(o.material){
+        o.material.needsUpdate=true;
+      }
+    }
+  });
+
+  modelBox.setFromObject(model);
+  const size=modelBox.getSize(new THREE.Vector3());
+  const center=modelBox.getCenter(new THREE.Vector3());
+
+  // Centrar el GLB horizontalmente sin alterar su escala.
+  model.position.x-=center.x;
+  model.position.z-=center.z;
+
+  // Ajuste inicial: coloca al usuario delante del modelo.
+  const maxDim=Math.max(size.x,size.y,size.z);
+  start.set(0,Math.max(2,size.y*.08),Math.max(8,maxDim*.32));
+  camera.position.copy(start);
+
+  document.getElementById("loading").style.display="none";
+
+  // Luces de espectáculo adaptadas al tamaño del GLB.
+  createShow(size);
+},undefined,err=>{
+  document.getElementById("loading").textContent="No se pudo cargar tmpv6gpnn8q.glb";
+  console.error(err);
+});
+
+function createShow(size){
+  const radius=Math.max(size.x,size.z)*.55;
+  const height=Math.max(size.y,20);
+
+  // Anillos de energía alrededor del escenario.
+  for(let i=0;i<4;i++){
+    const r=radius*(.7+i*.12);
+    const tor=new THREE.Mesh(
+      new THREE.TorusGeometry(r,Math.max(.04,r*.003),10,160),
+      new THREE.MeshBasicMaterial({color:i%2?0x8b45ff:0x16a9ff,transparent:true,opacity:.6})
+    );
+    tor.rotation.x=Math.PI/2;
+    tor.position.y=Math.max(1,height*.05+i*height*.025);
+    scene.add(tor);
+    effects.push(tor);
+  }
+
+  // Focos móviles.
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2;
+    const light=new THREE.SpotLight(i%3===0?0x9b50ff:0x159cff,18,Math.max(150,radius*1.8),Math.PI/14,.55,1);
+    light.position.set(Math.cos(a)*radius*.7,height*.8,Math.sin(a)*radius*.7);
+    light.target.position.set(0,0,0);
+    scene.add(light,light.target);
+    spots.push({light,phase:i*.7,a});
+  }
+
+  // Rayos láser.
+  for(let i=0;i<10;i++){
+    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+    const line=new THREE.Line(geo,new THREE.LineBasicMaterial({
+      color:i%2?0x55bfff:0xa55cff,transparent:true,opacity:.55
+    }));
+    scene.add(line); lasers.push({line,radius,height,phase:i*.63});
+  }
+}
+
+const effects=[],spots=[],lasers=[];
+const keys={};
+let yaw=0,pitch=0;
+
+addEventListener("keydown",e=>{keys[e.code]=true});
+addEventListener("keyup",e=>{keys[e.code]=false});
+
+renderer.domElement.addEventListener("click",()=>{
+  if(document.pointerLockElement!==renderer.domElement) renderer.domElement.requestPointerLock();
+});
+addEventListener("mousemove",e=>{
+  if(document.pointerLockElement!==renderer.domElement)return;
+  yaw-=e.movementX*.0022;
+  pitch-=e.movementY*.0022;
+  pitch=THREE.MathUtils.clamp(pitch,-1.35,1.35);
+});
+
+function reset(){
+  camera.position.copy(start);
+  yaw=0; pitch=0;
+}
+function movement(dt){
+  const speed=(keys.ShiftLeft||keys.ShiftRight)?32:16;
+  const forward=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+  const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+  const dir=new THREE.Vector3();
+
+  if(keys.KeyW||keys.ArrowUp)dir.add(forward);
+  if(keys.KeyS||keys.ArrowDown)dir.sub(forward);
+  if(keys.KeyD||keys.ArrowRight)dir.add(right);
+  if(keys.KeyA||keys.ArrowLeft)dir.sub(right);
+
+  if(dir.lengthSq()) camera.position.add(dir.normalize().multiplyScalar(speed*dt));
+  if(keys.Space)camera.position.y+=speed*dt;
+  if(keys.KeyC)camera.position.y-=speed*dt;
+  if(keys.KeyR){keys.KeyR=false;reset()}
+
+  camera.position.y=Math.max(.7,Math.min(120,camera.position.y));
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+}
+
+// Música: autoplay se intenta; si el navegador lo bloquea, el botón/clic la activa.
+const music=document.getElementById("music");
+const sound=document.getElementById("sound");
+music.volume=.8;
+async function playMusic(){
+ try{
+   await music.play();
+   sound.textContent="🔊 Música activa";
+ }catch{
+   sound.textContent="▶ Activar música";
+ }
+}
+addEventListener("load",playMusic);
+sound.addEventListener("click",playMusic);
+addEventListener("pointerdown",()=>{if(music.paused)playMusic()});
+
+const clock=new THREE.Clock();
+let t=0;
+
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.05);
+ t+=dt;
+ movement(dt);
+
+ effects.forEach((e,i)=>{
+   e.rotation.z=t*(.12+i*.04);
+   e.material.opacity=.35+.3*Math.abs(Math.sin(t*2+i));
+ });
+
+ spots.forEach((s,i)=>{
+   const a=s.a+t*(.18+i*.004);
+   const r=s.light.position.length()*0+.7*Math.max(15,modelBox.getSize(new THREE.Vector3()).x*.3);
+   s.light.position.x=Math.cos(a)*r;
+   s.light.position.z=Math.sin(a)*r;
+   s.light.position.y=20+Math.abs(Math.sin(t*1.7+s.phase))*35;
+   s.light.intensity=12+Math.max(0,Math.sin(t*4+s.phase))*22;
+   s.light.target.position.x=Math.sin(t*.7+s.phase)*r*.7;
+   s.light.target.position.z=Math.cos(t*.8+s.phase)*r*.7;
+ });
+
+ lasers.forEach((l,i)=>{
+   const a=t*(.35+i*.025)+l.phase;
+   const r=l.radius;
+   const p1=new THREE.Vector3(0,2,0);
+   const p2=new THREE.Vector3(Math.cos(a)*r,5+Math.abs(Math.sin(t*1.4+l.phase))*l.height*.75,Math.sin(a)*r);
+   l.line.geometry.setFromPoints([p1,p2]);
+   l.line.material.opacity=.18+.65*Math.abs(Math.sin(t*3+l.phase));
+ });
+
+ renderer.render(scene,camera);
+}
+animate();
+
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
