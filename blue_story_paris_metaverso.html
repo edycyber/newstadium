@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blue Story Paris — Metaverso Stadium</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #02020a; font-family: Arial, Helvetica, sans-serif; }
+    #scene { position: fixed; inset: 0; }
+    canvas { display: block; }
+
+    #hud {
+      position: fixed; z-index: 20; top: 22px; left: 50%; transform: translateX(-50%);
+      text-align: center; pointer-events: none; color: white;
+      text-shadow: 0 0 10px #38a9ff, 0 0 25px #0066ff;
+    }
+    #hud h1 { margin: 0; font-size: clamp(28px, 5vw, 58px); letter-spacing: 7px; font-weight: 800; }
+    #hud p { margin: 8px 0 0; font-size: clamp(14px, 2vw, 21px); letter-spacing: 4px; }
+
+    #help {
+      position: fixed; z-index: 25; left: 20px; bottom: 20px; max-width: 330px;
+      padding: 14px 16px; border: 1px solid rgba(70,180,255,.35);
+      border-radius: 14px; color: #dff4ff; background: rgba(0,8,25,.65);
+      backdrop-filter: blur(8px); font-size: 13px; line-height: 1.55;
+    }
+    #help b { color: #65c7ff; }
+
+    #sound {
+      position: fixed; z-index: 30; right: 20px; top: 20px;
+      border: 1px solid #42b7ff; border-radius: 999px; padding: 11px 16px;
+      color: white; background: rgba(0,18,45,.72); cursor: pointer;
+      box-shadow: 0 0 18px rgba(0,150,255,.35);
+    }
+
+    #stage {
+      position: fixed; z-index: 15; left: 50%; top: 53%; transform: translate(-50%, -50%);
+      width: min(600px, 52vw); height: min(400px, 35vw); min-width: 320px; min-height: 220px;
+      border: 2px solid rgba(83,196,255,.7); border-radius: 12px; overflow: hidden;
+      box-shadow: 0 0 20px #0077ff, 0 0 70px rgba(0,125,255,.55), inset 0 0 30px #001b44;
+      background: #000; transition: filter .25s, box-shadow .25s;
+    }
+    #stage iframe { width: 100%; height: 100%; border: none; display: block; }
+    #stageGlow {
+      position: fixed; z-index: 14; left: 50%; top: 53%; transform: translate(-50%, -50%);
+      width: min(700px, 60vw); height: min(500px, 45vw); border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(0,120,255,.25), transparent 68%);
+      pointer-events: none; filter: blur(12px);
+    }
+
+    #flash {
+      position: fixed; inset: 0; z-index: 10; pointer-events: none; opacity: 0;
+      background: radial-gradient(circle, rgba(255,255,255,.75), rgba(0,150,255,.12) 35%, transparent 70%);
+      mix-blend-mode: screen;
+    }
+
+    .badge {
+      display:inline-block; margin-top:8px; padding:4px 9px; border-radius:20px;
+      background:rgba(0,120,255,.18); border:1px solid rgba(100,200,255,.3);
+      font-size:11px; letter-spacing:1px;
+    }
+  </style>
+</head>
+<body>
+  <div id="scene"></div>
+
+  <div id="hud">
+    <h1>BLUE STORY PARIS</h1>
+    <p>Cancion: I'll Be Here</p>
+    <div class="badge">METAVERSE LIVE EXPERIENCE</div>
+  </div>
+
+  <button id="sound">🔊 Activar música</button>
+
+  <div id="stageGlow"></div>
+  <div id="stage">
+    <iframe
+      src="https://supavoxel.com/embed/cmtk7oieh038t58qtwltwb0af"
+      width="600" height="400"
+      style="border:none;"
+      allowfullscreen>
+    </iframe>
+  </div>
+
+  <div id="flash"></div>
+
+  <div id="help">
+    <b>CONTROLES</b><br>
+    WASD / Flechas: moverte · Mouse: mirar · Shift: correr<br>
+    Espacio: subir · C: bajar · R: reiniciar cámara<br>
+    <span style="opacity:.75">Haz clic en el escenario para capturar el mouse.</span>
+  </div>
+
+  <!-- Coloca "I'll Be Here.mp3" en la misma carpeta que este HTML. -->
+  <audio id="music" src="I'll Be Here.mp3" loop preload="auto"></audio>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x01010a);
+    scene.fog = new THREE.FogExp2(0x02030e, 0.0045);
+
+    const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 1600);
+    camera.position.set(0, 12, 115);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.getElementById("scene").appendChild(renderer.domElement);
+
+    // Ambiente
+    scene.add(new THREE.AmbientLight(0x203050, 1.4));
+    const moon = new THREE.DirectionalLight(0x79bfff, 1.1);
+    moon.position.set(-80, 140, 60);
+    scene.add(moon);
+
+    // Suelo del estadio
+    const field = new THREE.Mesh(
+      new THREE.CircleGeometry(82, 96),
+      new THREE.MeshStandardMaterial({ color: 0x030712, roughness: .82, metalness: .15 })
+    );
+    field.rotation.x = -Math.PI / 2;
+    field.position.y = -1;
+    scene.add(field);
+
+    // Pista circular
+    const track = new THREE.Mesh(
+      new THREE.RingGeometry(72, 88, 128),
+      new THREE.MeshBasicMaterial({ color: 0x07142b, side: THREE.DoubleSide })
+    );
+    track.rotation.x = -Math.PI / 2;
+    track.position.y = -.7;
+    scene.add(track);
+
+    // Anillos luminosos
+    function ring(radius, y, color, tube=.18) {
+      const m = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, tube, 12, 180),
+        new THREE.MeshBasicMaterial({ color })
+      );
+      m.rotation.x = Math.PI / 2;
+      m.position.y = y;
+      scene.add(m);
+      return m;
+    }
+    ring(71, -.3, 0x0077ff, .32);
+    ring(88, 1.0, 0x33bbff, .45);
+    ring(112, 8, 0x163dff, .28);
+    ring(145, 20, 0x1746ff, .22);
+
+    // Gradas: muchas filas concéntricas para un efecto de estadio gigantesco.
+    const seatMatA = new THREE.MeshStandardMaterial({ color: 0x17223d, emissive: 0x061735, emissiveIntensity: 1.3 });
+    const seatMatB = new THREE.MeshStandardMaterial({ color: 0x26314a, emissive: 0x09255b, emissiveIntensity: 1.5 });
+    const seatGeo = new THREE.BoxGeometry(.42, .18, .48);
+
+    for (let row = 0; row < 31; row++) {
+      const radius = 91 + row * 2.55;
+      const count = Math.floor((2 * Math.PI * radius) / .68);
+      for (let i = 0; i < count; i++) {
+        const a = i / count * Math.PI * 2;
+        const y = 1 + row * .82;
+        const x = Math.cos(a) * radius;
+        const z = Math.sin(a) * radius;
+        const seat = new THREE.Mesh(seatGeo, (i + row) % 9 === 0 ? seatMatB : seatMatA);
+        seat.position.set(x, y, z);
+        seat.rotation.y = -a + Math.PI / 2;
+        scene.add(seat);
+      }
+    }
+
+    // Techo ovalado
+    const roof = new THREE.Mesh(
+      new THREE.RingGeometry(138, 210, 128),
+      new THREE.MeshBasicMaterial({ color: 0x050817, transparent: true, opacity: .72, side: THREE.DoubleSide })
+    );
+    roof.rotation.x = -Math.PI / 2;
+    roof.position.y = 35;
+    scene.add(roof);
+
+    // Columnas y reflectores
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      const r = 158;
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(.65, .9, 52, 12),
+        new THREE.MeshStandardMaterial({ color: 0x1b2440, metalness: .8, roughness: .35 })
+      );
+      pole.position.set(Math.cos(a)*r, 18, Math.sin(a)*r);
+      scene.add(pole);
+
+      const lamp = new THREE.PointLight(i % 2 ? 0x168cff : 0x8b4dff, 2.7, 75);
+      lamp.position.set(Math.cos(a)*r, 42, Math.sin(a)*r);
+      scene.add(lamp);
+    }
+
+    // Público: puntos de luz que simulan miles de teléfonos.
+    const crowdGeo = new THREE.BufferGeometry();
+    const crowdCount = 11000;
+    const pos = new Float32Array(crowdCount * 3);
+    const col = new Float32Array(crowdCount * 3);
+    for (let i = 0; i < crowdCount; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 93 + Math.random() * 77;
+      const y = 3 + (r - 93) * .40 + Math.random() * 15;
+      pos[i*3] = Math.cos(a) * r;
+      pos[i*3+1] = y;
+      pos[i*3+2] = Math.sin(a) * r;
+      const bright = Math.random() < .18 ? 1 : .45;
+      col[i*3] = .15 * bright;
+      col[i*3+1] = .55 * bright;
+      col[i*3+2] = 1.0 * bright;
+    }
+    crowdGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    crowdGeo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const crowd = new THREE.Points(crowdGeo, new THREE.PointsMaterial({
+      size: .65, vertexColors: true, transparent: true, opacity: .9,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    scene.add(crowd);
+
+    // Pantalla/escenario 3D detrás del iframe
+    const platform = new THREE.Mesh(
+      new THREE.CylinderGeometry(15, 19, 1.4, 64),
+      new THREE.MeshStandardMaterial({ color: 0x061633, emissive: 0x003c99, emissiveIntensity: 2.5, metalness: .5, roughness: .25 })
+    );
+    platform.position.y = 0;
+    scene.add(platform);
+    ring(16, 1.0, 0x19a9ff, .24);
+
+    // Torres de luz del espectáculo
+    const movingLights = [];
+    for (let i = 0; i < 14; i++) {
+      const a = i / 14 * Math.PI * 2;
+      const r = 24;
+      const p = new THREE.SpotLight(i % 3 === 0 ? 0x9d55ff : 0x159cff, 22, 170, Math.PI / 15, .5, 1);
+      p.position.set(Math.cos(a)*r, 35, Math.sin(a)*r);
+      p.target.position.set(0, 0, 0);
+      scene.add(p, p.target);
+      movingLights.push({ light:p, phase:Math.random()*Math.PI*2, a });
+    }
+
+    // Láseres
+    const lasers = [];
+    const laserMat = new THREE.LineBasicMaterial({ color: 0x48b9ff, transparent:true, opacity:.55 });
+    for (let i=0; i<10; i++) {
+      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+      const line = new THREE.Line(geo, laserMat.clone());
+      scene.add(line); lasers.push(line);
+    }
+
+    // Control de cámara tipo primera persona
+    const keys = {};
+    let yaw = 0, pitch = 0;
+    const velocity = new THREE.Vector3();
+    const start = new THREE.Vector3(0, 12, 115);
+    camera.position.copy(start);
+
+    document.addEventListener("keydown", e => { keys[e.code] = true; });
+    document.addEventListener("keyup", e => { keys[e.code] = false; });
+
+    renderer.domElement.addEventListener("click", () => {
+      if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock();
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (document.pointerLockElement !== renderer.domElement) return;
+      yaw -= e.movementX * .0023;
+      pitch -= e.movementY * .0023;
+      pitch = Math.max(-1.35, Math.min(1.35, pitch));
+    });
+
+    function resetCamera() {
+      camera.position.copy(start); yaw = 0; pitch = 0;
+    }
+
+    function move(dt) {
+      const speed = (keys.ShiftLeft || keys.ShiftRight) ? 38 : 19;
+      const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+      const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+      const dir = new THREE.Vector3();
+      if (keys.KeyW || keys.ArrowUp) dir.add(forward);
+      if (keys.KeyS || keys.ArrowDown) dir.sub(forward);
+      if (keys.KeyD || keys.ArrowRight) dir.add(right);
+      if (keys.KeyA || keys.ArrowLeft) dir.sub(right);
+      if (dir.lengthSq()) dir.normalize().multiplyScalar(speed * dt);
+      camera.position.add(dir);
+      if (keys.Space) camera.position.y += speed * dt;
+      if (keys.KeyC) camera.position.y -= speed * dt;
+      camera.position.y = Math.max(2, Math.min(65, camera.position.y));
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -210, 210);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -210, 210);
+      if (keys.KeyR) { keys.KeyR = false; resetCamera(); }
+      camera.rotation.order = "YXZ";
+      camera.rotation.y = yaw;
+      camera.rotation.x = pitch;
+    }
+
+    // Música: el navegador puede bloquear autoplay. Se intenta automáticamente y el botón sirve de respaldo.
+    const music = document.getElementById("music");
+    const soundBtn = document.getElementById("sound");
+    music.volume = .78;
+
+    async function startMusic() {
+      try {
+        await music.play();
+        soundBtn.textContent = "🔊 Música activa";
+      } catch {
+        soundBtn.textContent = "▶ Activar música";
+      }
+    }
+    window.addEventListener("load", startMusic);
+    soundBtn.addEventListener("click", async () => {
+      if (music.paused) { await startMusic(); }
+      else { music.pause(); soundBtn.textContent = "▶ Activar música"; }
+    });
+    document.addEventListener("pointerdown", () => {
+      if (music.paused) startMusic();
+    }, { once:false });
+
+    // Show de luces sincronizado con el tiempo.
+    const clock = new THREE.Clock();
+    let t = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), .05);
+      t += dt;
+      move(dt);
+
+      // Respiración de la plataforma
+      platform.material.emissiveIntensity = 1.7 + Math.sin(t*4)*1.2;
+      crowd.material.opacity = .65 + Math.sin(t*2.5)*.25;
+
+      movingLights.forEach((o, i) => {
+        const a = o.a + t * (.16 + i*.006);
+        o.light.position.x = Math.cos(a) * (22 + Math.sin(t*1.7+i)*13);
+        o.light.position.z = Math.sin(a) * (22 + Math.cos(t*1.3+i)*13);
+        o.light.position.y = 24 + Math.sin(t*2+i)*12;
+        o.light.intensity = 14 + Math.max(0, Math.sin(t*5+i)) * 20;
+        o.light.target.position.x = Math.sin(t*.8+i)*25;
+        o.light.target.position.z = Math.cos(t*.7+i)*25;
+      });
+
+      lasers.forEach((line, i) => {
+        const a = t*(.5+i*.03)+i*.62;
+        const r = 120;
+        const y = 2 + Math.abs(Math.sin(t*1.7+i))*55;
+        const pts = [
+          new THREE.Vector3(0, 2, 0),
+          new THREE.Vector3(Math.cos(a)*r, y, Math.sin(a)*r)
+        ];
+        line.geometry.setFromPoints(pts);
+        line.material.opacity = .25 + Math.abs(Math.sin(t*3+i))*0.55;
+      });
+
+      // Flash ocasional
+      const beat = Math.pow(Math.max(0, Math.sin(t*3.2)), 18);
+      document.getElementById("flash").style.opacity = (beat * .22).toFixed(3);
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
